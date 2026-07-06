@@ -709,7 +709,23 @@ $("stratBuildBtn").onclick = () => {
   }
   const symbols = $("stratSymbols").value.split(/[,，\s]+/).filter(Boolean);
   if (!symbols.length) return;
-  const paramLines = Object.entries(params).map(([k, v]) => `    ${k}: ${v}`);
+  // ponytail: JSON->YAML scalar serializer; arrays must stay arrays, strings
+  // get quoted (a value with ':' or '#' would otherwise break the YAML).
+  const quote = (s) => `"${String(s).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+  const paramLines = [];
+  for (const [k, v] of Object.entries(params)) {
+    if (Array.isArray(v)) {
+      if (!v.length) { paramLines.push(`    ${k}: []`); continue; }
+      paramLines.push(`    ${k}:`);
+      for (const item of v) {
+        paramLines.push(`      - ${typeof item === "string" ? quote(item) : item}`);
+      }
+    } else if (typeof v === "string") {
+      paramLines.push(`    ${k}: ${quote(v)}`);
+    } else {
+      paramLines.push(`    ${k}: ${v}`);
+    }
+  }
   const yaml = [
     `name: strategy-${$("stratUniverseSelect").value}`,
     "kind: strategy",
