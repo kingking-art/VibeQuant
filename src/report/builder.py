@@ -7,7 +7,7 @@ recap, metric read-out, risk verdict, caveats.
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from ..dsl import TaskSpec
 from ..risk import RiskAssessment
@@ -120,6 +120,8 @@ def build_markdown_report(
     run_id: str,
     notes: Optional[List[str]] = None,
     validation: Optional[Dict] = None,
+    rotation_scores: Optional[Dict[str, Dict[str, float]]] = None,
+    rotation_top_k: Optional[int] = None,
 ) -> str:
     lang = spec.report.language if spec.report.language in _L else "en"
     t = _L[lang]
@@ -158,6 +160,7 @@ def build_markdown_report(
 
     lines += ["", f"## {t['verdict']}", "", _verdict(lang, metrics, risk)]
     lines += _validation_section(validation, lang)
+    lines += _rotation_section(rotation_scores, rotation_top_k, lang)
 
     all_notes = (notes or []) + (spec.notes or [])
     if all_notes:
@@ -334,3 +337,46 @@ def _validation_section(validation, lang: str) -> List[str]:
         )
     lines += ["", f"_{t['note']}_"]
     return lines
+
+
+def _rotation_section(
+    scores: Optional[Dict[str, Dict[str, float]]],
+    top_k: Optional[int],
+    lang: str,
+) -> List[str]:
+    """Per-rebalance top-k picks as a markdown table (last 20 rebalances).
+
+    Returns [] for non-rotation runs or when no rebalance had a full top_k.
+    """
+    if not scores or not top_k:
+        return []
+    rows: List[Tuple[str, List[str]]] = []
+    for date in sorted(scores):
+        sym_scores = scores[date]
+        if len(sym_scores) < top_k:
+            continue
+        ranked = sorted(sym_scores, key=sym_scores.get, reverse=True)[:top_k]
+        rows.append((date, ranked))
+    if not rows:
+        return []
+    recent = list(reversed(rows))[:20]
+    title = {
+        "zh": "轮动明细 (Rotation Timeline)",
+        "en": "Rotation Timeline",
+    }.get(lang if lang in ("zh", "en") else "en", "Rotation Timeline")
+    sub = {
+        "zh": f"最近 20 次调仓 (top-{top_k})",
+        "en": f"Last 20 rebalances (top-{top_k})",
+    }.get(lang if lang in ("zh", "en") else "en")
+    out = [
+        "",
+        f"## {title}",
+        "",
+        f"_{sub}_",
+        "",
+        "| Date | Picks |",
+        "|---|---|",
+    ]
+    for d, picks in recent:
+        out.append("| {} | {} |".format(d, ", ".join(picks)))
+    return out

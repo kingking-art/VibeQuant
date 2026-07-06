@@ -56,6 +56,8 @@ def report(ctx: RunContext) -> None:
         ctx.run.run_id,
         notes=ctx.gate_notes,
         validation=ctx.validation,
+        rotation_scores=ctx.backtest.rotation_scores,
+        rotation_top_k=ctx.backtest.rotation_top_k,
     )
     if ctx.spec.report.html:
         html_path = str(ctx.run.path("report.html"))
